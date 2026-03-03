@@ -10,10 +10,10 @@ function getEnv(name) {
 
 function getPusher() {
   return new Pusher({
-    appId: getEnv('PUSHER_APP_ID'),
-    key: getEnv('PUSHER_KEY'),
-    secret: getEnv('PUSHER_SECRET'),
-    cluster: getEnv('PUSHER_CLUSTER'),
+    appId: getEnv('VITE_PUSHER_APP_ID'),
+    key: getEnv('VITE_PUSHER_KEY'),
+    secret: getEnv('VITE_PUSHER_SECRET'),
+    cluster: getEnv('VITE_PUSHER_CLUSTER'),
     useTLS: true,
   });
 }
