@@ -1,51 +1,58 @@
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
-const Pusher = require("pusher");
+const http = require("http");
+const { Server } = require("socket.io");
 const mongoose = require("mongoose");
+
+const { setupSocketHandlers } = require("./socket/sockethandler");
+const { setupCallSocket } = require("./socket/callsocket");
+const { setupWebRTCSignaling } = require("./webrtc/signaling");
 
 dotenv.config();
 
 const app = express();
+const server = http.createServer(app);
 
+// ✅ Proper CORS
 app.use(cors({
-  origin: process.env.CLIENT_URL || "*"
+  origin: process.env.CLIENT_URL,
+  credentials: true
 }));
 
 app.use(express.json());
 
-// MongoDB Connection
+// ✅ MongoDB Safe Connection
 mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log("MongoDB Connected"))
-  .catch((err) => console.error("Mongo Error:", err.message));
-
-// Pusher Config
-const pusher = new Pusher({
-  appId: process.env.PUSHER_APP_ID,
-  key: process.env.PUSHER_KEY,
-  secret: process.env.PUSHER_SECRET,
-  cluster: process.env.PUSHER_CLUSTER,
-  useTLS: true
-});
-
-// Example route
-app.post("/api/messages", async (req, res) => {
-  const { roomId, message, sender } = req.body;
-
-  // Save to MongoDB (agar model hai to yahan save karo)
-
-  // Trigger realtime event
-  await pusher.trigger(`room-${roomId}`, "new-message", {
-    message,
-    sender,
-    timestamp: new Date()
+  .then(() => console.log("✅ MongoDB Connected"))
+  .catch((err) => {
+    console.error("❌ Mongo Error:", err.message);
   });
 
-  res.json({ success: true });
+// ✅ Health Route
+app.get("/", (req, res) => {
+  res.send("🚀 ShareHub Backend Running on Render");
 });
 
 app.get("/health", (req, res) => {
   res.json({ status: "OK" });
 });
 
-module.exports = app;
+// ✅ Socket.io Setup
+const io = new Server(server, {
+  cors: {
+    origin: process.env.CLIENT_URL,
+    methods: ["GET", "POST"]
+  }
+});
+
+setupSocketHandlers(io);
+setupCallSocket(io);
+setupWebRTCSignaling(io);
+
+// ✅ IMPORTANT — Render uses this PORT
+const PORT = process.env.PORT || 5000;
+
+server.listen(PORT, () => {
+  console.log(`🔥 Server running on port ${PORT}`);
+});
