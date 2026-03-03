@@ -6,6 +6,7 @@ const dotenv = require('dotenv');
 const { connectDB } = require('./config/db.js');
 const roomRoutes = require('./routes/roomRoutes.js');
 const messageRoutes = require('./routes/messageRoutes.js');
+const joinRoutes = require('./config/joinRoutes.js');
 const { setupSocketHandlers } = require('./sockets/socketHandler.js');
 const { setupCallSocket } = require('./sockets/callSocket.js');
 const { setupWebRTCSignaling } = require('./webrtc/signaling.js');
@@ -30,6 +31,7 @@ connectDB();
 
 app.use('/api/rooms', roomRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/join', joinRoutes);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
