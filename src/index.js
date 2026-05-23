@@ -111,8 +111,8 @@ setupSocketHandlers(io);
 setupCallSocket(io);
 setupWebRTCSignaling(io);
 
-/// Is line ko change karein
-const PORT = process.env.PORT || 8080; // Default ko 8080 kar dein kyunki Back4App isi par check karta hai
+// ✅ IMPORTANT — Render uses this PORT
+const PORT = process.env.PORT || 8080;
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`🔥 Server running on port ${PORT}`);
