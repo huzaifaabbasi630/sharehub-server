@@ -80,7 +80,9 @@ const io = new Server(server, {
     },
     credentials: true,
     methods: ["GET", "POST"]
-  }
+  },
+  transports: ['polling', 'websocket'], // Add polling as fallback for Vercel
+  allowUpgrades: true
 });
 
 // ✅ Health Route
