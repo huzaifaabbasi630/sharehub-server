@@ -2,6 +2,7 @@ const { Room } = require('../models/Room.js');
 const { Message } = require('../models/Message.js');
 const { JoinRequest } = require('../models/JoinRequest.js');
 const { inMemoryRooms, inMemoryMessages, inMemoryJoinRequests } = require('../utils/memoryStore.js');
+const aiService = require('../services/aiService');
 
 const activeUsers = new Map();
 
@@ -178,24 +179,25 @@ const setupSocketHandlers = (io) => {
     socket.on('join_room', async (data) => {
       try {
         const { roomCode, userName, isHost } = data;
+        const upperCode = roomCode.toUpperCase();
         
-        socket.join(roomCode);
-        activeUsers.set(socket.id, { roomCode, userName, isHost });
+        socket.join(upperCode);
+        activeUsers.set(socket.id, { roomCode: upperCode, userName, isHost });
         
-        const room = await Room.findOne({ code: roomCode });
+        const room = await Room.findOne({ code: upperCode });
         
         if (room && !isHost) {
           room.participants.push({ socketId: socket.id, name: userName });
           await room.save();
         }
         
-        socket.to(roomCode).emit('user_joined', {
+        socket.to(upperCode).emit('user_joined', {
           socketId: socket.id,
           userName,
           isHost: isHost || false
         });
         
-        socket.emit('joined_room', { roomCode, roomId: room?._id });
+        socket.emit('joined_room', { roomCode: upperCode, roomId: room?._id });
       } catch (error) {
         socket.emit('error', { message: error.message });
       }
@@ -235,9 +237,84 @@ const setupSocketHandlers = (io) => {
           inMemoryMessages.set(roomId, roomMessages);
         }
         
-        io.to(roomCode).emit('new_message', message);
+        const upperCode = roomCode.toUpperCase();
+        io.to(upperCode).emit('new_message', message);
+
+        // ── AI Smart Reply ──
+        if (type === 'text' && !content.startsWith('/')) {
+           const replies = await aiService.generateSmartReplies(content);
+           socket.emit('ai_smart_replies', { messageId: message._id, replies });
+        }
+
+        // ── AI Image Generation ──
+        if (type === 'text' && content.startsWith('/image')) {
+          const imageUrl = await aiService.generateImagePrompt(content);
+          const aiMessage = {
+            _id: Date.now().toString(),
+            roomId,
+            senderId: 'ai-assistant',
+            senderName: 'AI Work Assistant',
+            content: `Generated image for: ${content.replace('/image', '').trim()}`,
+            type: 'image',
+            fileUrl: imageUrl,
+            createdAt: new Date()
+          };
+          io.to(upperCode).emit('new_message', aiMessage);
+        }
+
       } catch (error) {
         socket.emit('error', { message: error.message });
+      }
+    });
+
+    // ── AI Chat Assistant ──
+    socket.on('ai_assistant_query', async (data) => {
+      try {
+        const { roomCode, query, chatHistory } = data;
+        const upperCode = roomCode.toUpperCase();
+        const response = await aiService.getAssistantResponse(query, chatHistory);
+        const aiMessage = {
+          _id: Date.now().toString(),
+          roomId: data.roomId, 
+          senderId: 'ai-assistant',
+          senderName: 'AI Work Assistant',
+          content: response,
+          type: 'text',
+          createdAt: new Date()
+        };
+        io.to(upperCode).emit('new_message', aiMessage);
+      } catch (err) {
+        console.error('AI Assistant Error:', err);
+      }
+    });
+
+    socket.on('summarize_chat', async (data) => {
+      try {
+        const { messages } = data;
+        const summary = await aiService.summarizeChat(messages);
+        socket.emit('chat_summary_result', { summary });
+      } catch (err) {
+        socket.emit('error', { message: 'Summarization failed' });
+      }
+    });
+
+    socket.on('improve_message', async (data) => {
+      try {
+        const { text } = data;
+        const improved = await aiService.improveMessage(text);
+        socket.emit('improved_message_result', { improved });
+      } catch (err) {
+        socket.emit('error', { message: 'Improvement failed' });
+      }
+    });
+
+    socket.on('translate_message', async (data) => {
+      try {
+        const { text, targetLang } = data;
+        const translated = await aiService.translateMessage(text, targetLang);
+        socket.emit('translated_message_result', { translated, originalText: text });
+      } catch (err) {
+        socket.emit('error', { message: 'Translation failed' });
       }
     });
 
@@ -279,6 +356,87 @@ const setupSocketHandlers = (io) => {
         settings,
         timestamp
       });
+    });
+
+    socket.on('start_call', (data) => {
+      const { roomCode, callerId, callerName, callType, isHost } = data;
+      const upperCode = roomCode.toUpperCase();
+      console.log(`Call started in room ${upperCode} by ${callerName} (${callType})`);
+      socket.to(upperCode).emit('incoming_call', {
+        callerId,
+        callerName,
+        callType,
+        roomCode: upperCode,
+        isHost
+      });
+    });
+
+    socket.on('join_call', (data) => {
+      const { roomCode, userId, userName } = data;
+      const upperCode = roomCode.toUpperCase();
+      socket.to(upperCode).emit('user_joined_call', { userId, userName });
+    });
+
+    socket.on('webrtc_offer', (data) => {
+      const { targetId, offer, senderId } = data;
+      io.to(targetId).emit('webrtc_offer', { offer, senderId });
+    });
+
+    socket.on('webrtc_answer', (data) => {
+      const { targetId, answer, senderId } = data;
+      io.to(targetId).emit('webrtc_answer', { answer, senderId });
+    });
+
+    socket.on('webrtc_ice_candidate', (data) => {
+      const { targetId, candidate, senderId } = data;
+      io.to(targetId).emit('webrtc_ice_candidate', { candidate, senderId });
+    });
+
+    socket.on('mute_audio', (data) => {
+      const { roomCode, userId, muted } = data;
+      socket.to(roomCode.toUpperCase()).emit('user_muted_audio', { userId, muted });
+    });
+
+    socket.on('disable_video', (data) => {
+      const { roomCode, userId, disabled } = data;
+      socket.to(roomCode.toUpperCase()).emit('user_disabled_video', { userId, disabled });
+    });
+
+    socket.on('leave_call', (data) => {
+      const { roomCode, userId } = data;
+      socket.to(roomCode.toUpperCase()).emit('user_left_call', { userId });
+    });
+
+    socket.on('end_call', (data) => {
+      const { roomCode, userId } = data;
+      socket.to(roomCode.toUpperCase()).emit('call_ended', { userId });
+    });
+
+    // Education Mode Events
+    socket.on('start_quiz', (data) => {
+      const { roomCode, quiz } = data;
+      const upperCode = roomCode.toUpperCase();
+      console.log(`Quiz started in room ${upperCode}`);
+      socket.to(upperCode).emit('incoming_quiz', quiz);
+    });
+
+    socket.on('submit_quiz_answer', (data) => {
+      const { roomCode, userName, optionIndex } = data;
+      const upperCode = roomCode.toUpperCase();
+      socket.to(upperCode).emit('quiz_response_received', { userName, optionIndex });
+    });
+
+    socket.on('attendance_request', (data) => {
+      const { roomCode, targetName, requesterName, id } = data;
+      const upperCode = roomCode.toUpperCase();
+      console.log(`Attendance requested for ${targetName || 'everyone'} in room ${upperCode} with ID: ${id}`);
+      socket.to(upperCode).emit('attendance_request', { targetName, requesterName, id });
+    });
+
+    socket.on('attendance_response', (data) => {
+      const { roomCode, userName, status } = data;
+      const upperCode = roomCode.toUpperCase();
+      socket.to(upperCode).emit('attendance_response', { userName, status });
     });
 
     socket.on('disconnect', async () => {

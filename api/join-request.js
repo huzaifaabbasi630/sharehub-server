@@ -18,6 +18,8 @@ function getPusher() {
   });
 }
 
+const { handleCors } = require('./_utils.js');
+
 module.exports = async function handler(req, res) {
   const startedAt = Date.now();
   console.log('[join-request] start', {
@@ -26,14 +28,10 @@ module.exports = async function handler(req, res) {
     now: new Date().toISOString(),
   });
 
-  // Basic CORS (safe defaults for production; can restrict later)
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
-  if (req.method === 'OPTIONS') {
+  // ✅ CORS handling
+  if (handleCors(req, res)) {
     console.log('[join-request] preflight');
-    return res.status(204).end();
+    return;
   }
 
   if (req.method !== 'POST') {

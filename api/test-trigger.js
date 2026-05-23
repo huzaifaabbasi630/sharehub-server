@@ -26,13 +26,11 @@ module.exports = async function handler(req, res) {
     now: new Date().toISOString(),
   });
 
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
-  if (req.method === 'OPTIONS') {
+  // ✅ CORS handling
+  const { handleCors } = require('./_utils.js');
+  if (handleCors(req, res)) {
     console.log('[test-trigger] preflight');
-    return res.status(204).end();
+    return;
   }
 
   try {

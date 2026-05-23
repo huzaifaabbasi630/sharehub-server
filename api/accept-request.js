@@ -1,22 +1,6 @@
 'use strict';
 
-const Pusher = require('pusher');
-
-function getEnv(name) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing required env var: ${name}`);
-  return v;
-}
-
-function getPusher() {
-  return new Pusher({
-    appId: getEnv('VITE_PUSHER_APP_ID'),
-    key: getEnv('VITE_PUSHER_KEY'),
-    secret: getEnv('VITE_PUSHER_SECRET'),
-    cluster: getEnv('VITE_PUSHER_CLUSTER'),
-    useTLS: true,
-  });
-}
+const { getPusher, handleCors } = require('./_utils.js');
 
 module.exports = async function handler(req, res) {
   const startedAt = Date.now();
@@ -26,13 +10,9 @@ module.exports = async function handler(req, res) {
     now: new Date().toISOString(),
   });
 
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
-  if (req.method === 'OPTIONS') {
+  if (handleCors(req, res)) {
     console.log('[accept-request] preflight');
-    return res.status(204).end();
+    return;
   }
 
   if (req.method !== 'POST') {
