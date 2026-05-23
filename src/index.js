@@ -68,7 +68,7 @@ const roomRoutes = require("./routes/roomRoutes.js");
 const messageRoutes = require("./routes/messageRoutes.js");
 const joinRequestRoutes = require("./routes/joinRequestRoutes.js");
 
-// ✅ Socket.io Setup with proper CORS (must be before routes that use io)
+// ✅ Socket.io Setup with proper CORS
 const io = new Server(server, {
   cors: {
     origin: (origin, callback) => {
@@ -82,7 +82,7 @@ const io = new Server(server, {
     methods: ["GET", "POST"]
   },
   transports: ['websocket'], // Force WebSocket only
-  allowUpgrades: false // Disable upgrade from polling
+  allowUpgrades: false
 });
 
 // ✅ Health Route
@@ -111,7 +111,7 @@ setupSocketHandlers(io);
 setupCallSocket(io);
 setupWebRTCSignaling(io);
 
-// ✅ IMPORTANT — Render uses this PORT
+// ⚡ Back4App ke liye port 8080 aur 0.0.0.0 binding full force
 const PORT = process.env.PORT || 8080;
 
 server.listen(PORT, "0.0.0.0", () => {
